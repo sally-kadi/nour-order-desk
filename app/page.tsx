@@ -73,8 +73,42 @@ export default function Home() {
     }
   }
 
+  // Initial loading is handled separately to avoid
+  // synchronous state updates inside the effect.
   useEffect(() => {
-    void loadOrders();
+    let cancelled = false;
+
+    async function fetchInitialOrders() {
+      try {
+        const response = await fetch("/api/orders", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load orders");
+        }
+
+        const data: Order[] = await response.json();
+
+        if (!cancelled) {
+          setOrders(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Unable to load orders. Please try again.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void fetchInitialOrders();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const pending = orders.filter(
@@ -96,17 +130,21 @@ export default function Home() {
     }));
   }
 
-  function startAdd() {
-    setEditingId(null);
-    setForm({ ...emptyForm });
-    setFormError("");
-    setShowForm(true);
+  function scrollToForm() {
     window.setTimeout(() => {
       document.getElementById("order-form")?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     }, 0);
+  }
+
+  function startAdd() {
+    setEditingId(null);
+    setForm({ ...emptyForm });
+    setFormError("");
+    setShowForm(true);
+    scrollToForm();
   }
 
   function startEdit(order: Order) {
@@ -123,13 +161,7 @@ export default function Home() {
 
     setFormError("");
     setShowForm(true);
-
-    window.setTimeout(() => {
-      document.getElementById("order-form")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
+    scrollToForm();
   }
 
   function cancelForm() {
@@ -139,7 +171,9 @@ export default function Home() {
     setFormError("");
   }
 
-  async function handleSaveOrder(event: FormEvent<HTMLFormElement>) {
+  async function handleSaveOrder(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
     setFormError("");
 
@@ -343,9 +377,11 @@ export default function Home() {
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#a47a51]">
             Studio Overview
           </p>
+
           <h2 className="mt-2 font-serif text-3xl font-semibold">
             Order Dashboard
           </h2>
+
           <p className="mt-2 text-[#7b6b60]">
             A quick look at your handmade candle orders.
           </p>
@@ -386,6 +422,7 @@ export default function Home() {
                 <p className="text-sm font-semibold">{stat.label}</p>
                 <span className="text-2xl">{stat.icon}</span>
               </div>
+
               <p className="mt-5 text-4xl font-bold">
                 {loading ? "—" : stat.value}
               </p>
@@ -638,9 +675,11 @@ export default function Home() {
           ) : orders.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-3xl">🕯️</p>
+
               <h4 className="mt-3 text-xl font-semibold">
                 No orders yet
               </h4>
+
               <p className="mt-2 text-[#8a776a]">
                 Create your first candle order to get started.
               </p>
@@ -735,6 +774,7 @@ export default function Home() {
         <p className="font-serif text-xl font-semibold text-white">
           NOUR Candle Studio
         </p>
+
         <p className="mt-2">
           Handcrafted with love · Order Management Dashboard
         </p>
