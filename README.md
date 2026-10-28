@@ -14,6 +14,7 @@ The application uses Next.js API Route Handlers and a shared in-memory store. No
 ## Features
 
 ### Order Management
+
 - View all customer orders
 - Create new orders
 - Edit existing order details
@@ -23,6 +24,7 @@ The application uses Next.js API Route Handlers and a shared in-memory store. No
 - Display order counts by status
 
 ### Dashboard
+
 - Responsive user interface
 - Handmade candle studio branding
 - Overview cards for total, pending, preparing, and delivered orders
@@ -99,7 +101,7 @@ The order ID and total cannot be edited directly by the client.
 Clone the repository:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/nour-order-desk.git
+git clone https://github.com/sally-kadi/nour-order-desk.git
 cd nour-order-desk
 ```
 
@@ -115,9 +117,15 @@ Start the development server:
 npm run dev
 ```
 
-Open:
+Open http://localhost:3000 in your browser.
 
-http://localhost:3000
+### Production Build
+
+To verify the production build:
+
+```bash
+npm run build
+```
 
 ## Testing
 
@@ -147,14 +155,16 @@ Orders are stored in server memory using a shared in-memory store.
 
 ## Project Scope
 
-Included:
+### Included
+
 - CRUD operations
 - Server-side validation
 - REST-style API endpoints
 - Order dashboard
 - Responsive design
 
-Not included:
+### Not Included
+
 - Database persistence
 - Authentication
 - Payment processing
