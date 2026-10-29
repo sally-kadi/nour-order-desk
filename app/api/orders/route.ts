@@ -44,15 +44,19 @@ export async function POST(request: Request) {
     "quantity",
     "unitPrice",
   ];
-
-  for (const key of Object.keys(data)) {
-    if (!allowedFields.includes(key)) {
-      return NextResponse.json(
-        { error: `Field "${key}" is not allowed` },
-        { status: 400 }
-      );
-    }
+for (const key of Object.keys(data)) {
+  // Ignore client-supplied total; the server calculates it.
+  if (key === "total") {
+    continue;
   }
+
+  if (!allowedFields.includes(key)) {
+    return NextResponse.json(
+      { error: `Field "${key}" is not allowed` },
+      { status: 400 }
+    );
+  }
+}
 
   for (const field of ["customerName", "phone", "productName"]) {
     if (

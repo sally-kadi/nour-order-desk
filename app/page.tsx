@@ -41,10 +41,15 @@ const statusStyles: Record<OrderStatus, string> = {
   Delivered: "bg-emerald-100 text-emerald-800",
 };
 
+function money(value: number) {
+  return `$${value.toFixed(2)}`;
+}
+
 export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<OrderForm>({ ...emptyForm });
@@ -52,10 +57,16 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function loadOrders() {
-    try {
-      setError("");
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewedOrder, setViewedOrder] = useState<Order | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState("");
 
+  async function loadOrders() {
+    setLoading(true);
+    setError("");
+
+    try {
       const response = await fetch("/api/orders", {
         cache: "no-store",
       });
@@ -73,8 +84,6 @@ export default function Home() {
     }
   }
 
-  // Initial loading is handled separately to avoid
-  // synchronous state updates inside the effect.
   useEffect(() => {
     let cancelled = false;
 
@@ -171,6 +180,42 @@ export default function Home() {
     setFormError("");
   }
 
+  async function handleViewOrder(id: string) {
+    setViewingId(id);
+    setViewedOrder(null);
+    setViewError("");
+    setViewLoading(true);
+
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(id)}`,
+        { cache: "no-store" }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Could not load order.");
+      }
+
+      setViewedOrder(result as Order);
+    } catch (caughtError) {
+      setViewError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Could not load order."
+      );
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  function closeDetails() {
+    setViewingId(null);
+    setViewedOrder(null);
+    setViewError("");
+  }
+
   async function handleSaveOrder(
     event: FormEvent<HTMLFormElement>
   ) {
@@ -243,6 +288,10 @@ export default function Home() {
 
       cancelForm();
       await loadOrders();
+
+      if (viewingId === editingId) {
+        closeDetails();
+      }
     } catch (caughtError) {
       setFormError(
         caughtError instanceof Error
@@ -264,8 +313,6 @@ export default function Home() {
     setDeletingId(order.id);
 
     try {
-      setError("");
-
       const response = await fetch(
         `/api/orders/${encodeURIComponent(order.id)}`,
         { method: "DELETE" }
@@ -278,6 +325,10 @@ export default function Home() {
 
       if (editingId === order.id) {
         cancelForm();
+      }
+
+      if (viewingId === order.id) {
+        closeDetails();
       }
 
       await loadOrders();
@@ -647,13 +698,23 @@ export default function Home() {
           </form>
         )}
 
+        {/* ERROR AND RETRY */}
         {error && (
-          <p
+          <div
             role="alert"
-            className="mb-5 rounded-xl bg-red-50 p-4 text-red-700"
+            className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-red-50 p-4 text-red-700"
           >
-            {error}
-          </p>
+            <p>{error}</p>
+
+            <button
+              type="button"
+              onClick={() => void loadOrders()}
+              disabled={loading}
+              className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {loading ? "Retrying..." : "Retry"}
+            </button>
+          </div>
         )}
 
         {/* ORDERS TABLE */}
@@ -672,7 +733,7 @@ export default function Home() {
             <p className="p-8 text-[#7b6b60]">
               Loading orders...
             </p>
-          ) : orders.length === 0 ? (
+          ) : orders.length === 0 && !error ? (
             <div className="p-12 text-center">
               <p className="text-3xl">🕯️</p>
 
@@ -723,11 +784,11 @@ export default function Home() {
                       </td>
 
                       <td className="px-5 py-5">
-                        ${order.unitPrice.toFixed(2)}
+                        {money(order.unitPrice)}
                       </td>
 
                       <td className="px-5 py-5 font-bold">
-                        ${order.total.toFixed(2)}
+                        {money(order.total)}
                       </td>
 
                       <td className="px-5 py-5">
@@ -742,6 +803,16 @@ export default function Home() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
+                            onClick={() =>
+                              void handleViewOrder(order.id)
+                            }
+                            className="rounded-lg bg-[#e9edf4] px-4 py-2 font-semibold text-[#405c77] hover:bg-[#dbe3ef]"
+                          >
+                            View
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => startEdit(order)}
                             className="rounded-lg bg-[#f1e5d7] px-4 py-2 font-semibold text-[#76543b] hover:bg-[#e7d3bd]"
                           >
@@ -751,7 +822,9 @@ export default function Home() {
                           <button
                             type="button"
                             disabled={deletingId !== null}
-                            onClick={() => handleDeleteOrder(order)}
+                            onClick={() =>
+                              void handleDeleteOrder(order)
+                            }
                             className="rounded-lg bg-red-50 px-4 py-2 font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
                           >
                             {deletingId === order.id
@@ -768,6 +841,105 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* ORDER DETAILS MODAL */}
+      {viewingId !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDetails();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-details-title"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl md:p-8"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                closeDetails();
+              }
+            }}
+          >
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <h2
+                id="order-details-title"
+                className="font-serif text-2xl font-semibold"
+              >
+                Order Details
+              </h2>
+
+              <button
+                type="button"
+                onClick={closeDetails}
+                aria-label="Close order details"
+                className="rounded-lg bg-[#f5ece1] px-3 py-2 font-bold text-[#563c2d]"
+              >
+                ✕
+              </button>
+            </div>
+
+            {viewLoading && (
+              <p className="text-[#7b6b60]">
+                Loading order details...
+              </p>
+            )}
+
+            {viewError && (
+              <div role="alert" className="space-y-3">
+                <p className="text-red-700">{viewError}</p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleViewOrder(viewingId)
+                  }
+                  className="rounded-lg bg-[#563c2d] px-4 py-2 font-semibold text-white"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {viewedOrder && !viewLoading && (
+              <dl className="space-y-4">
+                {[
+                  ["Order ID", viewedOrder.id],
+                  ["Customer", viewedOrder.customerName],
+                  ["Phone", viewedOrder.phone],
+                  ["Product", viewedOrder.productName],
+                  ["Quantity", String(viewedOrder.quantity)],
+                  ["Unit Price", money(viewedOrder.unitPrice)],
+                  ["Total", money(viewedOrder.total)],
+                  ["Status", viewedOrder.status],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="border-b border-[#eee4d9] pb-3"
+                  >
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-[#947f70]">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 break-words font-medium text-[#382b25]">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            <button
+              type="button"
+              onClick={closeDetails}
+              className="mt-7 w-full rounded-xl bg-[#563c2d] px-5 py-3 font-semibold text-white hover:bg-[#38271e]"
+            >
+              Close
+            </button>
+          </section>
+        </div>
+      )}
 
       {/* FOOTER */}
       <footer className="border-t border-[#e5d9ca] bg-[#563c2d] px-6 py-8 text-center text-sm text-[#f1e5d7]">
