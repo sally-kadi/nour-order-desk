@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 
 type OrderStatus = "Pending" | "Preparing" | "Delivered";
@@ -61,6 +61,19 @@ export default function Home() {
   const [viewedOrder, setViewedOrder] = useState<Order | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState("");
+
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const viewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const saveInProgressRef = useRef(false);
+  const viewRequestRef = useRef(0);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (viewingId !== null && dialog && !dialog.open) {
+      dialog.showModal();
+    }
+  }, [viewingId]);
 
   async function loadOrders() {
     setLoading(true);
@@ -133,6 +146,8 @@ export default function Home() {
   ).length;
 
   function updateForm(field: keyof OrderForm, value: string) {
+    if (saveInProgressRef.current) return;
+
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -149,6 +164,8 @@ export default function Home() {
   }
 
   function startAdd() {
+    if (saveInProgressRef.current || deletingId !== null) return;
+
     setEditingId(null);
     setForm({ ...emptyForm });
     setFormError("");
@@ -157,8 +174,9 @@ export default function Home() {
   }
 
   function startEdit(order: Order) {
-    setEditingId(order.id);
+    if (saveInProgressRef.current || deletingId !== null) return;
 
+    setEditingId(order.id);
     setForm({
       customerName: order.customerName,
       phone: order.phone,
@@ -174,6 +192,8 @@ export default function Home() {
   }
 
   function cancelForm() {
+    if (saveInProgressRef.current) return;
+
     setShowForm(false);
     setEditingId(null);
     setForm({ ...emptyForm });
@@ -181,6 +201,8 @@ export default function Home() {
   }
 
   async function handleViewOrder(id: string) {
+    const requestId = ++viewRequestRef.current;
+
     setViewingId(id);
     setViewedOrder(null);
     setViewError("");
@@ -194,32 +216,49 @@ export default function Home() {
 
       const result = await response.json();
 
+      if (requestId !== viewRequestRef.current) return;
+
       if (!response.ok) {
         throw new Error(result.error || "Could not load order.");
       }
 
       setViewedOrder(result as Order);
     } catch (caughtError) {
+      if (requestId !== viewRequestRef.current) return;
+
       setViewError(
         caughtError instanceof Error
           ? caughtError.message
           : "Could not load order."
       );
     } finally {
-      setViewLoading(false);
+      if (requestId === viewRequestRef.current) {
+        setViewLoading(false);
+      }
     }
   }
 
   function closeDetails() {
+    viewRequestRef.current += 1;
+    dialogRef.current?.close();
+
     setViewingId(null);
     setViewedOrder(null);
     setViewError("");
+    setViewLoading(false);
+
+    window.requestAnimationFrame(() => {
+      viewButtonRef.current?.focus();
+    });
   }
 
   async function handleSaveOrder(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
+
+    if (saveInProgressRef.current) return;
+
     setFormError("");
 
     const quantity = Number(form.quantity);
@@ -255,14 +294,18 @@ export default function Home() {
       return;
     }
 
+    saveInProgressRef.current = true;
     setSaving(true);
 
+    const currentEditingId = editingId;
+    let saveSucceeded = false;
+
     try {
-      const isEditing = editingId !== null;
+      const isEditing = currentEditingId !== null;
 
       const response = await fetch(
         isEditing
-          ? `/api/orders/${encodeURIComponent(editingId)}`
+          ? `/api/orders/${encodeURIComponent(currentEditingId)}`
           : "/api/orders",
         {
           method: isEditing ? "PATCH" : "POST",
@@ -286,24 +329,40 @@ export default function Home() {
         throw new Error(result.error || "Could not save order.");
       }
 
-      cancelForm();
-      await loadOrders();
+      saveSucceeded = true;
 
-      if (viewingId === editingId) {
+      setShowForm(false);
+      setEditingId(null);
+      setForm({ ...emptyForm });
+      setFormError("");
+
+      if (viewingId === currentEditingId) {
         closeDetails();
       }
+
+      await loadOrders();
     } catch (caughtError) {
-      setFormError(
+      const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Something went wrong."
-      );
+          : "Something went wrong.";
+
+      if (saveSucceeded) {
+        setError(
+          "Order saved, but the list could not be refreshed. Please retry."
+        );
+      } else {
+        setFormError(message);
+      }
     } finally {
+      saveInProgressRef.current = false;
       setSaving(false);
     }
   }
 
   async function handleDeleteOrder(order: Order) {
+    if (saveInProgressRef.current || deletingId !== null) return;
+
     const confirmed = window.confirm(
       `Are you sure you want to delete the order for ${order.customerName}?`
     );
@@ -331,6 +390,7 @@ export default function Home() {
         closeDetails();
       }
 
+      // DELETE returns 204 No Content.
       await loadOrders();
     } catch (caughtError) {
       setError(
@@ -344,7 +404,7 @@ export default function Home() {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-[#e5d8c9] bg-white px-4 py-3 text-[#382b25] outline-none focus:border-[#a47a51] focus:ring-2 focus:ring-[#a47a51]/20";
+    "mt-2 w-full rounded-xl border border-[#e5d8c9] bg-white px-4 py-3 text-[#382b25] outline-none focus:border-[#a47a51] focus:ring-2 focus:ring-[#a47a51]/20 disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <main className="min-h-screen bg-[#faf7f2] text-[#382b25]">
@@ -548,6 +608,7 @@ export default function Home() {
 
           <button
             type="button"
+            disabled={saving || deletingId !== null}
             onClick={() => {
               if (showForm) {
                 cancelForm();
@@ -555,7 +616,7 @@ export default function Home() {
                 startAdd();
               }
             }}
-            className="rounded-xl bg-[#563c2d] px-6 py-3 font-semibold text-white transition hover:bg-[#38271e]"
+            className="rounded-xl bg-[#563c2d] px-6 py-3 font-semibold text-white transition hover:bg-[#38271e] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {showForm ? "Cancel" : "+ Add Order"}
           </button>
@@ -566,6 +627,7 @@ export default function Home() {
           <form
             id="order-form"
             onSubmit={handleSaveOrder}
+            aria-busy={saving}
             className="mb-8 scroll-mt-6 rounded-3xl border border-[#eadfd2] bg-white p-6 shadow-sm md:p-8"
           >
             <h3 className="font-serif text-2xl font-semibold">
@@ -576,7 +638,10 @@ export default function Home() {
               Fill in the details below to manage this candle order.
             </p>
 
-            <div className="mt-7 grid gap-5 md:grid-cols-2">
+            <fieldset
+              disabled={saving}
+              className="mt-7 grid gap-5 md:grid-cols-2 disabled:opacity-60"
+            >
               <label className="text-sm font-semibold">
                 Customer Name
                 <input
@@ -645,7 +710,7 @@ export default function Home() {
                   onChange={(event) =>
                     updateForm("unitPrice", event.target.value)
                   }
-                  placeholder="12.00"
+                  placeholder="8.00"
                   className={inputClass}
                 />
               </label>
@@ -666,7 +731,7 @@ export default function Home() {
                   </select>
                 </label>
               )}
-            </div>
+            </fieldset>
 
             {formError && (
               <p role="alert" className="mt-5 text-sm text-red-600">
@@ -678,7 +743,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-[#563c2d] px-6 py-3 font-semibold text-white hover:bg-[#38271e] disabled:opacity-50"
+                className="rounded-xl bg-[#563c2d] px-6 py-3 font-semibold text-white hover:bg-[#38271e] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving
                   ? "Saving..."
@@ -690,7 +755,8 @@ export default function Home() {
               <button
                 type="button"
                 onClick={cancelForm}
-                className="rounded-xl border border-[#d9c8b6] px-6 py-3 font-semibold text-[#563c2d]"
+                disabled={saving}
+                className="rounded-xl border border-[#d9c8b6] px-6 py-3 font-semibold text-[#563c2d] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -803,9 +869,10 @@ export default function Home() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() =>
-                              void handleViewOrder(order.id)
-                            }
+                            onClick={(event) => {
+                              viewButtonRef.current = event.currentTarget;
+                              void handleViewOrder(order.id);
+                            }}
                             className="rounded-lg bg-[#e9edf4] px-4 py-2 font-semibold text-[#405c77] hover:bg-[#dbe3ef]"
                           >
                             View
@@ -814,18 +881,19 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => startEdit(order)}
-                            className="rounded-lg bg-[#f1e5d7] px-4 py-2 font-semibold text-[#76543b] hover:bg-[#e7d3bd]"
+                            disabled={saving || deletingId !== null}
+                            className="rounded-lg bg-[#f1e5d7] px-4 py-2 font-semibold text-[#76543b] hover:bg-[#e7d3bd] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Edit
                           </button>
 
                           <button
                             type="button"
-                            disabled={deletingId !== null}
+                            disabled={saving || deletingId !== null}
                             onClick={() =>
                               void handleDeleteOrder(order)
                             }
-                            className="rounded-lg bg-red-50 px-4 py-2 font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            className="rounded-lg bg-red-50 px-4 py-2 font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {deletingId === order.id
                               ? "Deleting..."
@@ -844,101 +912,90 @@ export default function Home() {
 
       {/* ORDER DETAILS MODAL */}
       {viewingId !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeDetails();
-            }
+        <dialog
+          ref={dialogRef}
+          aria-labelledby="order-details-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeDetails();
           }}
+          className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-3xl bg-white p-6 text-[#382b25] shadow-2xl backdrop:bg-black/50 md:p-8"
         >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="order-details-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl md:p-8"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                closeDetails();
-              }
-            }}
-          >
-            <div className="mb-6 flex items-center justify-between gap-4">
-              <h2
-                id="order-details-title"
-                className="font-serif text-2xl font-semibold"
-              >
-                Order Details
-              </h2>
-
-              <button
-                type="button"
-                onClick={closeDetails}
-                aria-label="Close order details"
-                className="rounded-lg bg-[#f5ece1] px-3 py-2 font-bold text-[#563c2d]"
-              >
-                ✕
-              </button>
-            </div>
-
-            {viewLoading && (
-              <p className="text-[#7b6b60]">
-                Loading order details...
-              </p>
-            )}
-
-            {viewError && (
-              <div role="alert" className="space-y-3">
-                <p className="text-red-700">{viewError}</p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void handleViewOrder(viewingId)
-                  }
-                  className="rounded-lg bg-[#563c2d] px-4 py-2 font-semibold text-white"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {viewedOrder && !viewLoading && (
-              <dl className="space-y-4">
-                {[
-                  ["Order ID", viewedOrder.id],
-                  ["Customer", viewedOrder.customerName],
-                  ["Phone", viewedOrder.phone],
-                  ["Product", viewedOrder.productName],
-                  ["Quantity", String(viewedOrder.quantity)],
-                  ["Unit Price", money(viewedOrder.unitPrice)],
-                  ["Total", money(viewedOrder.total)],
-                  ["Status", viewedOrder.status],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="border-b border-[#eee4d9] pb-3"
-                  >
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-[#947f70]">
-                      {label}
-                    </dt>
-                    <dd className="mt-1 break-words font-medium text-[#382b25]">
-                      {value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <h2
+              id="order-details-title"
+              className="font-serif text-2xl font-semibold"
+            >
+              Order Details
+            </h2>
 
             <button
               type="button"
               onClick={closeDetails}
-              className="mt-7 w-full rounded-xl bg-[#563c2d] px-5 py-3 font-semibold text-white hover:bg-[#38271e]"
+              aria-label="Close order details"
+              autoFocus
+              className="rounded-lg bg-[#f5ece1] px-3 py-2 font-bold text-[#563c2d]"
             >
-              Close
+              ✕
             </button>
-          </section>
-        </div>
+          </div>
+
+          {viewLoading && (
+            <p className="text-[#7b6b60]">
+              Loading order details...
+            </p>
+          )}
+
+          {viewError && (
+            <div role="alert" className="space-y-3">
+              <p className="text-red-700">{viewError}</p>
+
+              <button
+                type="button"
+                onClick={() => void handleViewOrder(viewingId)}
+                className="rounded-lg bg-[#563c2d] px-4 py-2 font-semibold text-white"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {viewedOrder && !viewLoading && (
+            <dl className="space-y-4">
+              {[
+                ["Order ID", viewedOrder.id],
+                ["Customer", viewedOrder.customerName],
+                ["Phone", viewedOrder.phone],
+                ["Product", viewedOrder.productName],
+                ["Quantity", String(viewedOrder.quantity)],
+                ["Unit Price", money(viewedOrder.unitPrice)],
+                ["Total", money(viewedOrder.total)],
+                ["Status", viewedOrder.status],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="border-b border-[#eee4d9] pb-3"
+                >
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[#947f70]">
+                    {label}
+                  </dt>
+
+                  <dd className="mt-1 break-words font-medium text-[#382b25]">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          <button
+            type="button"
+            onClick={closeDetails}
+            className="mt-7 w-full rounded-xl bg-[#563c2d] px-5 py-3 font-semibold text-white hover:bg-[#38271e]"
+          >
+            Close
+          </button>
+        </dialog>
       )}
 
       {/* FOOTER */}

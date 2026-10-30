@@ -3,215 +3,136 @@
 
 ## 1. Project Summary
 
-Nour's Order Desk is a full-stack order management application developed for a fictional handmade candle studio.
+Nour's Order Desk is a full-stack order management dashboard for a fictional handmade candle studio.
 
-The project uses Next.js, TypeScript, Tailwind CSS, REST-style API Route Handlers, and in-memory data storage.
+The application was built using Next.js 16, TypeScript, and Tailwind CSS.
 
-The application provides a responsive dashboard where users can manage customer orders.
+It supports creating, viewing, updating, and deleting customer orders through REST API endpoints.
 
 ## 2. Completed Implementation
 
 ### Backend
 
-- Implemented five REST API operations.
-- Added an in-memory order store with fictional seed data.
-- Implemented server-generated order IDs.
-- Calculated order totals on the server.
-- Added validation for required fields, quantities, prices, and statuses.
-- Returned appropriate HTTP status codes for successful and invalid requests.
+- Five REST API operations: GET all, GET by ID, POST, PATCH, DELETE.
+- Shared in-memory order storage.
+- Server-generated order IDs.
+- Order totals calculated using integer cents.
+- Input validation and meaningful HTTP status codes.
+- Partial PATCH updates without replacing unrelated fields.
+- Rejected updates leave existing data unchanged.
+- Unknown order IDs return 404.
+- Successful DELETE returns 204 No Content.
 
 ### Frontend
 
-- Created a branded candle studio interface.
-- Built dashboard summary cards.
-- Displayed orders in a responsive table.
-- Added Create, View, Edit, and Delete actions.
-- Added confirmation before deleting orders.
-- Implemented loading, empty, and error states.
-- Added retry controls for loading failures.
-- Displayed order details in a dialog.
+- Responsive order dashboard.
+- Order counts and status summaries.
+- Create, edit, view, and delete actions.
+- Delete confirmation.
+- Loading, error, retry, and empty states.
+- Order details dialog with keyboard support.
+- Form protection implemented for pending save requests.
+- Mobile-friendly table with horizontal scrolling.
 
 ## 3. Testing Completed
 
-The following functionality has been manually verified:
+Manual testing covered:
 
-- Retrieve all orders.
-- Retrieve an individual order.
-- Create a new order.
-- Edit quantity and status.
-- Recalculate totals after updates.
-- Delete an order.
-- Display order details.
-- Reject zero quantity.
-- Reject negative unit price.
-- Reject invalid status.
-- Reject empty PATCH requests.
-- Reject malformed JSON.
-- Return 404 for an unknown order.
+- Creating, editing, viewing, and deleting orders.
+- Server-calculated totals.
+- Status updates.
+- API validation and error responses.
+- Unknown GET, PATCH, and DELETE requests returning 404.
+- Rejected updates preserving original order data.
+- API failure and recovery using the Retry button.
+- Keyboard focus trapping, Escape, and focus restoration.
+- Mobile layout at 360 × 642 px.
+- Empty-state rendering using a temporary response override.
+- Exact CRUD acceptance scenario.
+- Additional order creation with quantity 2 and total $16.
 
-The latest ESLint check passed without errors or warnings.
+Quality checks completed:
 
-A production build passed before the most recent View/Retry interface changes.
+- `npm run lint` — Passed.
+- `npm run build` — Passed.
+- TypeScript compilation — Passed.
 
-See `docs/TESTING.md` for the detailed testing record.
+Full testing details are documented in `docs/TESTING.md`.
 
 ## 4. Technical Challenges
 
-### React Effect Lint Rule
-
-An earlier implementation triggered the React `set-state-in-effect` ESLint rule.
-
-The initial data-loading logic was revised, and ESLint subsequently passed.
-
 ### API Validation
 
-The API must validate incoming data independently of the frontend.
+The API needed to reject invalid quantities, prices, statuses, and malformed JSON without changing valid stored data.
 
-Server-side checks were added for invalid quantities, prices, statuses, malformed JSON, and unsupported updates.
+### Accurate Totals
 
-### Calculated Totals
+Order totals are calculated using integer cents to reduce floating-point rounding problems.
 
-The total must remain controlled by the server rather than being supplied directly by the client.
+### State Synchronization
 
-Order totals are recalculated whenever quantity or unit price changes.
+After creating, editing, or deleting an order, the dashboard refreshes its list and counts.
 
-### Temporary Data Storage
+### Accessibility
 
-The assignment uses an in-memory store rather than a database.
+The order details dialog supports keyboard navigation, Escape to close, and focus restoration.
 
-The implementation documents that order changes may be lost after server restarts or rebuilds.
+### Network Failure Handling
+
+The dashboard shows a useful error and Retry button when loading orders fails.
 
 ## 5. Design Decisions
 
-- Used a warm beige and brown color palette to match the fictional candle studio.
-- Used a single-page dashboard to simplify order management.
-- Used a separate details dialog for read-only order viewing.
-- Used clear status labels and dashboard counters.
-- Used server-side validation to protect data integrity.
-- Used fictional customer information for demonstration purposes.
+- A warm, minimal visual style reflects the handmade candle studio theme.
+- A single dashboard keeps order management straightforward.
+- REST endpoints separate server operations from the user interface.
+- A native dialog supports accessible order details.
+- In-memory storage keeps the assignment focused on CRUD and API behavior.
+- Fictional customer data avoids using real personal information.
 
 ## 6. Known Limitations
 
-- No persistent database.
-- No user authentication.
-- No payment processing.
-- No inventory management.
-- In-memory data may reset between server sessions.
-
-These features are outside the current project scope.
+- Orders are not persisted in a database.
+- Data may reset when the server restarts.
+- Authentication and user roles are not implemented.
+- Payment processing and inventory management are outside the assignment scope.
 
 ## 7. Remaining Verification
 
-Before final submission:
-
-- Run the production build again after the latest changes.
-- Verify the retry behavior during an API failure.
-- Verify the empty state.
-- Check the mobile layout.
-- Test nonexistent order updates and deletions.
-- Confirm rejected updates do not change existing orders.
-- Complete the assignment acceptance test.
-- Capture screenshots and testing evidence.
-- Push the final changes and documentation to the assignment branch.
+- Complete a dedicated interaction test proving that form fields and Cancel/Add/Edit controls cannot interrupt an in-flight save.
+- Ensure any required evidence screenshots are saved in the repository.
+- Commit and push the final changes to the assignment branch.
 
 ## 8. Final Reflection
 
-This assignment provided practice in connecting a responsive React interface to Next.js API Route Handlers.
+This assignment strengthened my understanding of full-stack CRUD development with Next.js and TypeScript.
 
-The implementation reinforced the importance of server-side validation, meaningful HTTP responses, derived order totals, error handling, and testing both successful and unsuccessful API requests.
+I practiced connecting frontend actions to API routes, validating input, calculating totals safely, handling failed requests, and testing accessibility and responsive layouts.
 
-The remaining checks will be documented before the project is marked ready for submission.
-
+The most important lesson was that a successful API response is not enough: rejected updates must also preserve existing data, and the interface must handle loading and error states clearly.
 
 ## 9. AI Usage and Technical Understanding
 
-### 1. Trace one Add Order action from the form to the Route Handler and back.
+### How does creating an order work?
 
-When the user completes the Add Order form and submits it, the frontend sends a POST request using `fetch()` to `/api/orders`.
+The frontend sends a POST request to `/api/orders`. The server validates the submitted data, generates an ID, calculates the total, stores the order, and returns 201 Created.
 
-The Route Handler in `app/api/orders/route.ts` receives the JSON request and validates the submitted fields using the server-side order logic.
+### How is the total calculated?
 
-If the input is valid, the server creates an order with a generated ID, calculates its total, and assigns the initial status `Pending`.
+The server converts the unit price to integer cents, multiplies it by quantity, and converts the result back to dollars.
 
-The API returns the saved order with HTTP 201. The dashboard then refreshes the orders list so the new order and updated summary counts are displayed.
+### What happens when a PATCH request is invalid?
 
-If the request fails, the form displays an error instead of treating the order as saved.
+The API returns 400 Bad Request and does not modify the existing order.
 
-### 2. Where is the total calculated, and why is that decision important?
+### Why use PATCH instead of replacing the entire order?
 
-The total is calculated on the server in `lib/orders.ts`.
+PATCH allows updating selected fields while preserving the other values.
 
-The calculation converts the unit price to integer cents, multiplies it by the quantity, and converts the result back to dollars.
+### What happens when the server restarts?
 
-Calculating the total on the server prevents the client from controlling the final amount and reduces floating-point precision problems.
+Because storage is in memory, order changes may be lost.
 
-The total is recalculated when quantity or unit price changes.
+### How was AI assistance verified?
 
-### 3. Show one invalid request. Why did it fail, and did stored data remain unchanged?
-
-I tested an invalid PATCH request:
-
-`PATCH /api/orders/[id]`
-
-Request body:
-
-```json
-{
-  "status": "Cancelled"
-}
-```
-
-The API returned HTTP 400 because `Cancelled` is not one of the supported statuses.
-
-I fetched the same order before and after the rejected request.
-
-Observed results:
-
-- Before: Pending, total $24.00
-- Rejected PATCH: HTTP 400
-- After: Pending, total $24.00
-
-This confirmed that the rejected update did not change the stored order.
-
-### 4. What is the difference between PATCH and replacing an entire object?
-
-PATCH updates only the fields supplied in the request.
-
-For example, sending:
-
-```json
-{
-  "quantity": 4
-}
-```
-
-should update the quantity while preserving the existing customer name, phone, product name, and status.
-
-Replacing an entire object would require providing the complete replacement representation and could overwrite or remove fields that were omitted.
-
-For this assignment, PATCH is appropriate because Nour often needs to correct only one part of an order.
-
-### 5. What happens to your orders after a server restart?
-
-Orders are stored in server memory, not in a database.
-
-They may reset after a server restart, development reload, or rebuild.
-
-The store is intended for local learning and demonstration, not permanent storage.
-
-A deployed demo would not make the data persistent.
-
-### 6. Which AI suggestion did you correct or verify, and what evidence helped you decide?
-
-AI helped with planning, implementing, and debugging the order dashboard and API.
-
-One suggestion I verified was to use a shared server-side in-memory store for all Route Handlers.
-
-I tested this by creating an order with POST and retrieving it with GET using the generated order ID.
-
-The GET response returned the same ID, customer details, quantity, total, and status as the created order.
-
-I also verified that an invalid PATCH request returned HTTP 400 without changing the existing order.
-
-These checks helped confirm the behavior through actual API responses rather than relying only on the suggested code.
-
+AI-assisted suggestions were checked against the actual implementation and manual tests, including POST followed by GET, rejected PATCH followed by GET, and the exact CRUD acceptance scenario.
