@@ -67,8 +67,8 @@ Testing dates: October 28–30, 2026
 | A13 | Rejected PATCH followed by GET | Original order remained unchanged | Passed |
 | A14 | PATCH /api/orders/999 | 404 Not Found | Passed |
 | A15 | DELETE /api/orders/999 | 404 Not Found | Passed |
-| A16 | PATCH attempting to change ID | 400 Bad Request | Passed |
-| A17 | GET after rejected ID update | Original ID and order data unchanged | Passed |
+| F16 | Empty order list | Empty-state message appears correctly | Deleted all three demo orders; dashboard displayed 0 orders, "No orders yet", and the create-first-order message | Passed |
+| F17 | Prevent form changes while save is pending | Add Order and Cancel cannot interrupt an in-flight save | Tested using Slow Save Test throttling; Saving... appeared and Add Order and Cancel were disabled during the request | Passed |
 
 ## 5. Validation Evidence
 

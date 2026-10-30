@@ -99,9 +99,19 @@ The dashboard shows a useful error and Retry button when loading orders fails.
 
 ## 7. Remaining Verification
 
-- Complete a dedicated interaction test proving that form fields and Cancel/Add/Edit controls cannot interrupt an in-flight save.
-- Ensure any required evidence screenshots are saved in the repository.
-- Commit and push the final changes to the assignment branch.
+The following checks have been completed:
+- Pending-save protection: Saving state displayed; Add Order and Cancel disabled during the request.
+- Keyboard-accessible details dialog: focus trapping, Escape, and focus restoration.
+- API load failure and Retry.
+- Mobile layout at 360 × 642 px.
+- Fresh production build and ESLint.
+- Unknown-ID GET, PATCH, and DELETE returning 404.
+- Rejected PATCH leaving order data unchanged.
+- Exact CRUD acceptance scenario, including deletion followed by GET 404.
+
+Still pending:
+- Empty order list state.
+- Final verification and push of updated documentation.
 
 ## 8. Final Reflection
 
